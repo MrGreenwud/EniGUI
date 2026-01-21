@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Assertions;
 using Unity.Mathematics;
+using System.Runtime.CompilerServices;
 
 namespace EniGUI.LowLevel
 {
@@ -65,15 +66,21 @@ namespace EniGUI.LowLevel
         public static void PushClip(Rect rect) => s_ClipStack.Push(rect);
         public static void PopClip() => s_ClipStack.Pop();
 
-        public static void PushID(uint id) => s_IDStack.Push(id);
+        public static uint PushID(uint id) => s_IDStack.Push(id);
         public static void PopID() => s_IDStack.Pop();
 
+        public static void DrawQuad(Rect rect, Material material)
+        {
+            var batchData = s_BatchSet.GetBatch(material);
+            batchData.AddQuad(rect, s_IDStack.Current, (ushort)s_ClipStack.Current);
+        }
         public static void DrawQuad(Rect rect, Material material, ReadOnlySpan<float2> uvs = default)
         {
-            BatchData batchData = s_BatchSet.GetBatch(material);
-            batchData.AddQuad(rect, 10, s_IDStack.Current, (ushort)s_ClipStack.Current, uvs);
+            var batchData = s_BatchSet.GetBatch(material);
+            batchData.AddQuad(rect, s_IDStack.Current, (ushort)s_ClipStack.Current, uvs);
         }
-    
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void EmitDrawCommands()
         {
             var batches = s_BatchSet.Batches;
@@ -81,7 +88,8 @@ namespace EniGUI.LowLevel
             if(batches.Length == 0)
                 return;
 
-            s_CommandBuffer.SetRenderTarget(s_Context.Color);
+            s_CommandBuffer.SetRenderTarget(s_Context.MultipleTexture, s_Context.DummyDepth);
+
             for (int i = 0; i < batches.Length; i++)
             {
                 var batch = batches[i];

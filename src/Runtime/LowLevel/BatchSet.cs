@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
@@ -8,7 +7,6 @@ namespace EniGUI.LowLevel
     internal sealed class BatchSet : IDisposable
     {
         private readonly uint m_MaxVertexCountPerBatch;
-        private readonly Dictionary<Material, BatchData> m_MappedBatches = new();
         
         private BatchData[] m_Batches;
         private int m_FirstUsed;
@@ -23,7 +21,7 @@ namespace EniGUI.LowLevel
         {
             m_MaxVertexCountPerBatch = maxVertexCountPerBatch;
             m_Batches = new BatchData[capacity];
-            m_MappedBatches = new((int)capacity);
+            FillBatches();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -32,20 +30,15 @@ namespace EniGUI.LowLevel
             if (m_HotMaterial == material && !m_HotBatch.IsFull)
                 return m_HotBatch;
 
-            if (!m_MappedBatches.TryGetValue(material, out BatchData batch) || batch.IsFull)
+            if (m_LastUsed >= m_Batches.Length)
             {
-                if (m_LastUsed >= m_Batches.Length)
-                    Array.Resize(ref m_Batches, m_Batches.Length * 2);
-
-                batch = m_Batches[m_LastUsed] ??= new BatchData((int)m_MaxVertexCountPerBatch);
-                batch.Clear(material);
-                m_LastUsed++;
-
-                if (!m_MappedBatches.ContainsKey(material))
-                    m_MappedBatches.Add(material, batch);
-                else
-                    m_MappedBatches[material] = batch;
+                Array.Resize(ref m_Batches, m_Batches.Length * 2);
+                FillBatches();
             }
+
+            var batch = m_Batches[m_LastUsed];
+            batch.Clear(material);
+            m_LastUsed++;
 
             m_HotMaterial = material;
             m_HotBatch = batch;
@@ -56,7 +49,6 @@ namespace EniGUI.LowLevel
         public void Break()
         {
             m_FirstUsed = m_LastUsed;
-            m_MappedBatches.Clear();
             m_HotMaterial = null;
             m_HotBatch = null;
         }
@@ -68,10 +60,15 @@ namespace EniGUI.LowLevel
 
         public void Dispose()
         {
-            m_MappedBatches.Clear();
-
             for(int i = 0; i < m_Batches.Length; i++)
                 m_Batches[i]?.Dispose();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void FillBatches()
+        {
+            for (int i = m_LastUsed; i < m_Batches.Length; i++)
+                m_Batches[i] = new((int)m_MaxVertexCountPerBatch);
         }
     }
 }

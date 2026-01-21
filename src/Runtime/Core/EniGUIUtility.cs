@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Mathematics;
+using System.Runtime.CompilerServices;
 
 namespace EniGUI.LowLevel
 {
@@ -11,7 +12,8 @@ namespace EniGUI.LowLevel
 
         public uint Current { get; private set; }
 
-        public void Push(uint id)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public uint Push(uint id)
         {
             uint hash = Current;
 
@@ -20,7 +22,9 @@ namespace EniGUI.LowLevel
 
             m_PreviousID.Push(Current);
             Current = hash;
+            return Current;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Pop()
         {
             Current = m_PreviousID.Pop();

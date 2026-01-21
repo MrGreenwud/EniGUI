@@ -71,22 +71,7 @@ namespace EniGUI.Editor
             OnDraw();
             LowLevel.GUIDrawer.EndFrame();
 
-            RenderTexture frame = null;
-
-            switch (m_DrawMod)
-            {
-                case DrawMod.Color:
-                    frame = m_DrawContext.Color;
-                    break;
-                case DrawMod.ID:
-                    frame = m_DrawContext.ID;
-                    break;
-                case DrawMod.Depth:
-                    frame = m_DrawContext.Depth;
-                    break;
-            }
-
-            GUI.DrawTexture(new Rect(Vector2.zero, Size), frame, ScaleMode.StretchToFill, true);
+            GUI.DrawTexture(new Rect(Vector2.zero, Size), m_DrawContext.Color, ScaleMode.StretchToFill, true);
         }
 
         public void SwitchDrawMod(DrawMod drawMod) => m_DrawMod = drawMod;

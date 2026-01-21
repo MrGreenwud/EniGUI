@@ -16,13 +16,14 @@ namespace EniGUI.LowLevel
         internal readonly IDStack IDStack;
         internal readonly ClipStack ClipStack;
 
+        internal RenderTexture DummyDepth { get; private set; }
+
         public RenderTexture Color { get; private set; }
         public RenderTexture ID { get; private set; }
-        public RenderTexture Depth { get; private set; }
 
         public GUIContext(uint with, uint height, uint maxVertexCountPerBatch)
         {
-            MultipleTexture = new RenderTargetIdentifier[3];
+            MultipleTexture = new RenderTargetIdentifier[2];
             Resize(with, height);
 
             BatchSet = new BatchSet(BATCH_SET_CAPACITY, maxVertexCountPerBatch);
@@ -36,52 +37,44 @@ namespace EniGUI.LowLevel
         {
             Color?.Dispose();
             ID?.Dispose();
-            Depth?.Dispose();
+            DummyDepth?.Dispose();
 
             Color = new((int)with, (int)height, 0, RenderTextureFormat.ARGB32);
-            ID = new((int)with / 2, (int)height / 2, 0, RenderTextureFormat.RG32);
-            Depth = new((int)with, (int)height, 0, RenderTextureFormat.R16);
+            ID = new((int)with, (int)height, 0, RenderTextureFormat.RG32);
+            DummyDepth = new((int)with, (int)height, 0, RenderTextureFormat.R16);
 
             Color.hideFlags = HideFlags.DontSave;
             ID.hideFlags = HideFlags.DontSave;
-            Depth.hideFlags = HideFlags.DontSave;
+            DummyDepth.hideFlags = HideFlags.DontSave;
 
             MultipleTexture[0] = Color;
             MultipleTexture[1] = ID;
-            MultipleTexture[2] = Depth;
         }
 
         public void Clear()
         {
-            var originTexture = RenderTexture.active;
-
-            RenderTexture.active = Color;
-            GL.Clear(true, true, UnityEngine.Color.clear);
-
-            RenderTexture.active = ID;
-            GL.Clear(true, true, UnityEngine.Color.clear);
-
-            RenderTexture.active = Depth;
-            GL.Clear(true, true, UnityEngine.Color.clear);
-
             BatchSet.Clear();
             CommandBuffer.Clear();
 
-            RenderTexture.active = originTexture;
+            CommandBuffer.SetRenderTarget(MultipleTexture, DummyDepth);
+            CommandBuffer.ClearRenderTarget(true, true, UnityEngine.Color.clear);
+            Graphics.ExecuteCommandBuffer(CommandBuffer);
+
+            CommandBuffer.Clear();
         }
 
         public void Dispose()
         {
             MultipleTexture[0] = default;
             MultipleTexture[1] = default;
-            MultipleTexture[2] = default;
 
             Color.Dispose();
             ID.Dispose();
-            Depth.Dispose();
+            DummyDepth.Dispose();
 
             BatchSet.Dispose();
             CommandBuffer.Dispose();
+            ClipStack.Dispose();
         }
     }
 }
