@@ -7,27 +7,29 @@ namespace EniGUI.LowLevel
     internal sealed class BatchSet : IDisposable
     {
         private readonly uint m_MaxVertexCountPerBatch;
-        
+        private readonly Material m_Material;
+
         private BatchData[] m_Batches;
         private int m_FirstUsed;
         private int m_LastUsed;
 
-        private Material m_HotMaterial;
         private BatchData m_HotBatch;
 
+        public byte ActiveTexture { get; private set; }
         public ReadOnlySpan<BatchData> Batches => m_Batches.AsSpan(m_FirstUsed, m_LastUsed - m_FirstUsed);
 
-        public BatchSet(uint capacity, uint maxVertexCountPerBatch)
+        public BatchSet(Material material, uint capacity, uint maxVertexCountPerBatch)
         {
+            m_Material = material;
             m_MaxVertexCountPerBatch = maxVertexCountPerBatch;
             m_Batches = new BatchData[capacity];
             FillBatches();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public BatchData GetBatch(Material material)
+        public BatchData GetBatch()
         {
-            if (m_HotMaterial == material && !m_HotBatch.IsFull)
+            if (m_HotBatch != null && !m_HotBatch.IsFull)
                 return m_HotBatch;
 
             if (m_LastUsed >= m_Batches.Length)
@@ -37,21 +39,22 @@ namespace EniGUI.LowLevel
             }
 
             var batch = m_Batches[m_LastUsed];
-            batch.Clear(material);
+            batch.Clear(m_Material);
             m_LastUsed++;
 
-            m_HotMaterial = material;
             m_HotBatch = batch;
 
             return m_HotBatch;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Break()
         {
             m_FirstUsed = m_LastUsed;
-            m_HotMaterial = null;
             m_HotBatch = null;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             m_LastUsed = 0;

@@ -4,149 +4,97 @@ using UnityEngine;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
-using UnityEngine.Rendering;
 
 namespace EniGUI.LowLevel
 {
-    internal struct Vertex
-    {
-        public float pX;
-        public float pY;
-        public float pZ;
-        public float2 UV;
-        public uint ID;
-        public uint Clip;
-    }
-
     internal sealed class BatchData : IDisposable
     {
-        private const MeshUpdateFlags MESH_UPDATE_FLAGS =
-            MeshUpdateFlags.DontRecalculateBounds
-            | MeshUpdateFlags.DontResetBoneBounds
-            | MeshUpdateFlags.DontValidateIndices
-            | MeshUpdateFlags.DontNotifyMeshUsers;
-        
-        private static readonly float2[] s_ZeroUVs = new float2[4];
+        private static readonly float2[] s_ZeroUVs = new float2[2];
 
-        public readonly Mesh Mesh;
+        public readonly ComputeBuffer ElementBuffer;
 
-        private NativeArray<Vertex> m_Vertexes;
-        private NativeArray<int> m_Indexes;
+        private NativeArray<UIElement> m_Elements;
 
-        private int m_VertexCount = 0;
-
+        public int Count { get; private set; }
         public Material Material { get; private set; }
-        public bool IsFull => m_VertexCount + 4 > m_Vertexes.Length;
+        public bool IsFull { get; private set; }
 
-        public BatchData(int maxVertexCount = 10000)
+        public BatchData(int maxElementCount = 2500)
         {
-            int maxIndexCount = maxVertexCount * 6 / 4;
+            m_Elements = new(maxElementCount, Allocator.Persistent);
 
-            m_Vertexes = new NativeArray<Vertex>(maxVertexCount, Allocator.Persistent);
-            m_Indexes = new NativeArray<int>(maxIndexCount, Allocator.Persistent);
-
-            for (int q = 0; q < maxIndexCount / 6; q++)
-            {
-                int vi = q * 4;
-                int ii = q * 6;
-
-                m_Indexes[ii + 0] = vi + 0;
-                m_Indexes[ii + 1] = vi + 1;
-                m_Indexes[ii + 2] = vi + 2;
-
-                m_Indexes[ii + 3] = vi + 0;
-                m_Indexes[ii + 4] = vi + 2;
-                m_Indexes[ii + 5] = vi + 3;
-            }
-
-            Mesh = new Mesh();
-            Mesh.MarkDynamic();
-            Mesh.hideFlags = HideFlags.DontSave;
-            Mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 100000);
-
-            Mesh.SetVertexBufferParams(maxVertexCount,
-                new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.UInt32, 1),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.UInt32, 1));
-
-            Mesh.SetIndexBufferParams(maxIndexCount, IndexFormat.UInt32);
-
-            Mesh.SetIndexBufferData(m_Indexes, 0, 0, maxIndexCount, MESH_UPDATE_FLAGS);
-
-            Mesh.subMeshCount = 1;
-            Mesh.SetSubMesh(0, new SubMeshDescriptor(0, maxIndexCount, MeshTopology.Triangles));
+            ElementBuffer = new(maxElementCount, sizeof(uint) * 8);
         }
 
+        private readonly float2 a = new float2(0, 1);
+        private readonly float2 b = new float2(1, 0);
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddQuad(Rect rect, uint id, ushort clip)
-        {
-            AddQuad(rect, id, clip, s_ZeroUVs);
-        }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddQuad(Rect rect, uint id, ushort clip, ReadOnlySpan<float2> uvs = default)
+        public void AddElement(
+            ShortRect rect, 
+            uint id,
+            ushort clip, 
+            byte texture, 
+            ushort color,
+            byte type)
         {
             unsafe
             {
-                var baseVertexCount = m_VertexCount;
+                var posXMin = unchecked((ushort)rect.MinX);
+                var posXMax = unchecked((ushort)rect.MaxX);
+                var posYMin = unchecked((ushort)rect.MinY);
+                var posYMax = unchecked((ushort)rect.MaxY);
 
-                var xMin = rect.xMin;
-                var xMax = rect.xMax;
-                var yMin = rect.yMin;
-                var yMax = rect.yMax;
+                var uv0 = a;
+                var uv1 = b;
 
-                var uv0 = uvs[0];
-                var uv1 = uvs[1];
-                var uv2 = uvs[2];
-                var uv3 = uvs[3];
+                var uvX0 = (ushort)(uv0.x * 256f);
+                var uvY0 = (ushort)(uv0.y * 256f);
+                var uvX1 = (ushort)(uv1.x * 256f);
+                var uvY1 = (ushort)(uv1.y * 256f);
 
-                Vertex* v = (Vertex*)m_Vertexes.GetUnsafePtr() + baseVertexCount;
+                UIElement* e = (UIElement*)m_Elements.GetUnsafePtr() + Count;
 
-                v[0].pX = xMin;
-                v[0].pY = yMax;
-                v[0].UV = uv0;
-                v[0].ID = id;
-                v[0].Clip = clip;
+                e->PosMin = ((uint)posXMin << 16) | posYMin;
+                e->PosMax = ((uint)posXMax << 16) | posYMax;
 
-                v[1].pX = xMin;
-                v[1].pY = yMin;
-                v[1].UV = uv1;
-                v[1].ID = id;
-                v[1].Clip = clip;
+                e->UVMax = ((uint)uvY1 << 16) | uvX1;
+                e->UVMin = ((uint)uvY0 << 16) | uvX0;
 
-                v[2].pX = xMax;
-                v[2].pY = yMin;
-                v[2].UV = uv2;
-                v[2].ID = id;
-                v[2].Clip = clip;
+                e->Meta0 = ((uint)type & 0xF) << 28 | 0u << 20 | id & 0xFFFFF;
+                e->Meta1 = ((uint)clip & 0x1FFF) << 19 | ((uint)texture & 0x7) << 16 | color;
+                e->Meta2 = 0; //unused
+                e->Meta3 = 0; //unused
 
-                v[3].pX = xMax;
-                v[3].pY = yMax;
-                v[3].UV = uv3;
-                v[3].ID = id;
-                v[3].Clip = clip;
-
-                m_VertexCount += 4;
+                Count++;
             }
+
+            IsFull = Count + 1 >= m_Elements.Length;
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void AddQuad(ShortRect rect, uint id, ushort clip, ReadOnlySpan<float2> uvs = default)
+        {
+            
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void UpdateMesh()
+        public void UpdateBuffer()
         {
-            Mesh.SetVertexBufferData(m_Vertexes, 0, 0, m_VertexCount, 0, MESH_UPDATE_FLAGS);
+            ElementBuffer.SetData(m_Elements, 0, 0, Count); 
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear(Material material)
         {
-            m_VertexCount = 0;
             Material = material;
+            Count = 0;
+            IsFull = false;
         }
 
         public void Dispose()
         {
-            UnityEngine.Object.DestroyImmediate(Mesh);
-
-            m_Vertexes.Dispose();
-            m_Indexes.Dispose();
+            ElementBuffer.Release();
+            m_Elements.Dispose();
         }
     }
 }

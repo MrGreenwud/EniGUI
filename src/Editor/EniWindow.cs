@@ -50,7 +50,7 @@ namespace EniGUI.Editor
             m_LifetimeHandle = EditorLifetime.Global.CreateNested();
             GUID = GUID.Generate();
 
-            m_DrawContext = new GUIContext(100, 100, 10000);
+            m_DrawContext = new GUIContext(Matrix4x4.identity, 100, 100, 10000);
             m_DrawContext.AutoDispose(Lifetime);
 
             OnOpen();
@@ -67,11 +67,15 @@ namespace EniGUI.Editor
         }
         private void Draw()
         {
-            LowLevel.GUIDrawer.BeginFrame(m_DrawContext);
+            GUILowLevel.BeginFrame(m_DrawContext);
             OnDraw();
-            LowLevel.GUIDrawer.EndFrame();
+            GUILowLevel.EndFrame();
 
-            GUI.DrawTexture(new Rect(Vector2.zero, Size), m_DrawContext.Color, ScaleMode.StretchToFill, true);
+            UnityEngine.GUI.DrawTexture(
+                new Rect(Vector2.zero, Size), 
+                m_DrawContext.Color, 
+                ScaleMode.StretchToFill, 
+                true);
         }
 
         public void SwitchDrawMod(DrawMod drawMod) => m_DrawMod = drawMod;
