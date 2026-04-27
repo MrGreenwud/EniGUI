@@ -9,6 +9,12 @@ The project is in an early development stage (draft), but it already demonstrate
 - Offer low-level rendering control using CommandBuffer, Mesh, RenderTexture, and batching.
 - Minimize allocations and draw calls for maximum performance.
 
+### Current Achievements
+- Capable of rendering up to 1,000,000 elements at 30–40 FPS in the Unity Editor
+- Efficient batching and resource management system
+- Stable core rendering architecture
+- Convenient and developer-friendly API
+
 ### Future Development
 - Support for interactive elements (buttons, sliders, input fields)
 - Runtime UI support (replacement for uGUI)
