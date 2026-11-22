@@ -5,9 +5,9 @@ namespace EniGUI.LowLevel
 {
     public static class EniGUIUtility
     {
-        public static uint GetControlID(uint hint, Rect rect, string name = "")
+        public static uint GetControlID(uint hint, ShortRect rect, string name = "")
         {
-            uint hash = (uint)HashCode.Combine(rect.x, rect.y, rect.width, rect.height, name);
+            uint hash = (uint)HashCode.Combine(rect.X, rect.Y, rect.Width, rect.Height, name);
 
             hash ^= hint;
             hash *= 16777619u;

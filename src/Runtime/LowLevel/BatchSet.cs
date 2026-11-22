@@ -1,77 +1,49 @@
 using System;
-using System.Runtime.CompilerServices;
 using UnityEngine;
+using UnityEngine.Assertions;
 
-namespace EniGUI.LowLevel
+namespace EniGUI.Internal
 {
-    internal sealed class BatchSet : IDisposable
+    public sealed class BatchSet
     {
-        private readonly uint m_MaxVertexCountPerBatch;
-        private readonly Material m_Material;
+        private readonly int m_MaxElementPerBatch;
 
-        private BatchData[] m_Batches;
-        private int m_FirstUsed;
-        private int m_LastUsed;
+        private Batch[] m_Batches = new Batch[32];
 
-        private BatchData m_HotBatch;
+        public ReadOnlySpan<Batch> Batches => m_Batches.AsSpan(0, Count);
+        public int Count { get; private set; }
 
-        public byte ActiveTexture { get; private set; }
-        public ReadOnlySpan<BatchData> Batches => m_Batches.AsSpan(m_FirstUsed, m_LastUsed - m_FirstUsed);
+        public BatchSet() : this(5000) { }
 
-        public BatchSet(Material material, uint capacity, uint maxVertexCountPerBatch)
+        public BatchSet(int maxElementPerBatch)
         {
-            m_Material = material;
-            m_MaxVertexCountPerBatch = maxVertexCountPerBatch;
-            m_Batches = new BatchData[capacity];
-            FillBatches();
+            m_MaxElementPerBatch = maxElementPerBatch;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public BatchData GetBatch()
+        public void Split(int count, Material material)
         {
-            if (m_HotBatch != null && !m_HotBatch.IsFull)
-                return m_HotBatch;
+            Assert.IsNotNull(material);
+            Assert.IsTrue(count > 0);
 
-            if (m_LastUsed >= m_Batches.Length)
+            var batchCount = (count + m_MaxElementPerBatch - 1) / m_MaxElementPerBatch;
+
+            if (Count + batchCount > m_Batches.Length)
+                Array.Resize(ref m_Batches, Math.Max(m_Batches.Length * 2, (Count + batchCount) * 2));
+
+            var offset = 0;
+
+            for (var i = 0; i < batchCount; i++)
             {
-                Array.Resize(ref m_Batches, m_Batches.Length * 2);
-                FillBatches();
+                var batchSize = Math.Min(m_MaxElementPerBatch, count);
+                m_Batches[Count++] = new(material, offset, batchSize);
+                offset += batchSize;
+                count -= batchSize;
             }
-
-            var batch = m_Batches[m_LastUsed];
-            batch.Clear(m_Material);
-            m_LastUsed++;
-
-            m_HotBatch = batch;
-
-            return m_HotBatch;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Break()
-        {
-            m_FirstUsed = m_LastUsed;
-            m_HotBatch = null;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            m_LastUsed = 0;
-            Break();
-        }
-
-        public void Dispose()
-        {
-            for(int i = 0; i < m_Batches.Length; i++)
-                m_Batches[i]?.Dispose();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void FillBatches()
-        {
-            for (int i = m_LastUsed; i < m_Batches.Length; i++)
-                m_Batches[i] = new((int)m_MaxVertexCountPerBatch);
+            Count = 0;
         }
     }
 }

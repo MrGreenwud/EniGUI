@@ -6,29 +6,36 @@ namespace EniGUI.Internal
 {
     internal static class GUIDrawer
     {
-        private static GUIDrawContext s_Context;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void EmitTextures(GUIDrawContext context)
+        {
+            var textures = context.TextureSet.Textures;
+            var cmd = context.CommandBuffer;
 
-        public static void BindContext(GUIDrawContext context) => s_Context = context;
+            for (int i = 0; i < textures.Length; i++)
+                cmd.SetGlobalTexture($"TEX{i}", textures[i]);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void EmitDrawCommands(Matrix4x4 camera)
+        public static void EmitDrawCommands(GUIDrawContext context, Matrix4x4 camera)
         {
-            var batches = s_Context.BatchSet.Batches;
+            var batches = context.BatchSet.Batches;
+            var elements = context.ElementSet.Elements;
 
             if (batches.Length == 0)
                 return;
 
-            var cmd = s_Context.CommandBuffer;
+            var cmd = context.CommandBuffer;
+            var buffer = context.ComputeBuffer;
 
-            cmd.SetRenderTarget(s_Context.MultipleTexture, s_Context.DummyDepth);
+            cmd.SetRenderTarget(context.MultipleTexture, context.DummyDepth);
+            cmd.SetGlobalBuffer("ELEMENTS", buffer);
 
             for (int i = 0; i < batches.Length; i++)
             {
                 var batch = batches[i];
 
-                batch.UpdateBuffer();
-
-                cmd.SetGlobalBuffer("ELEMENTS", batch.ElementBuffer);
+                cmd.SetBufferData(buffer, elements, batch.Offset, 0, batch.Count);
                 cmd.DrawProcedural(camera, batch.Material, 0, MeshTopology.Triangles, batch.Count * 6);
             }
         }

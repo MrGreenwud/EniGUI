@@ -9,16 +9,19 @@ namespace EniGUI.Editor
     public enum DrawMod
     {
         Color = 0,
-        ID = 1,
-        Depth = 2,
+        ID = 1
     }
 
     public class EniWindow : EditorWindow
     {
+        private EditorGUIEventHandler m_EventHandler;
+
         private LifetimeHandle m_LifetimeHandle;
-        private GUIContext m_DrawContext;
+        private GUIContext m_Context;
+
         private DrawMod m_DrawMod = DrawMod.Color;
 
+        public Material DefaultMaterial { get; private set; }
         public GUID GUID { get; private set; }
         public Vector2 Size { get; private set; }
 
@@ -31,6 +34,7 @@ namespace EniGUI.Editor
 
             Initialize();
             Resize();
+            HandleInput();
             Draw();
         }
 
@@ -48,34 +52,67 @@ namespace EniGUI.Editor
                 return;
 
             m_LifetimeHandle = EditorLifetime.Global.CreateNested();
+            
             GUID = GUID.Generate();
 
-            m_DrawContext = new GUIContext(Matrix4x4.identity, 100, 100, 10000);
-            m_DrawContext.AutoDispose(Lifetime);
+            DefaultMaterial = GUI.CreateDefaultMaterial();
+            DefaultMaterial.AutoDispose(Lifetime);
+
+            m_Context = new(Matrix4x4.identity, 100, 100, 5000);
+            m_Context.AutoDispose(Lifetime);
+
+            m_EventHandler = new();
 
             OnOpen();
         }
+
         private void Resize()
         {
             if (Size == position.size)
                 return;
 
             Size = position.size;
-            m_DrawContext.Resize((uint)Size.x, (uint)Size.y);
+            m_Context.Resize((uint)Size.x, (uint)Size.y);
 
             OnResize();
         }
+
+        private void HandleInput()
+        {
+            var e = Event.current;
+
+            m_EventHandler.Handle(e);
+            m_Context.HitTracker.Push(m_EventHandler.CurrentHit);
+
+            if (e.type == EventType.Repaint)
+                m_Context.InputTracker.Push(m_EventHandler.Capture());
+        }
+
         private void Draw()
         {
-            GUILowLevel.BeginFrame(m_DrawContext);
+            if (Event.current.type != EventType.Repaint)
+                return;
+
+            GUILowLevel.BeginFrame(m_Context);
+            GUILowLevel.SetMaterial(DefaultMaterial);
             OnDraw();
+            GUILowLevel.ResetID();
             GUILowLevel.EndFrame();
 
+            Texture image = m_DrawMod switch
+            {
+                DrawMod.Color => m_Context.Color,
+                DrawMod.ID => m_Context.ID,
+                _ => m_Context.Color,
+            };
+
             UnityEngine.GUI.DrawTexture(
-                new Rect(Vector2.zero, Size), 
-                m_DrawContext.Color, 
-                ScaleMode.StretchToFill, 
+                new Rect(Vector2.zero, Size),
+                image,
+                ScaleMode.StretchToFill,
                 true);
+
+            Repaint();
         }
 
         public void SwitchDrawMod(DrawMod drawMod) => m_DrawMod = drawMod;

@@ -16,7 +16,8 @@ Shader "EniGUI/Default"
             ZWrite Off
             ZTest Always
             Cull Off
-            Blend SrcAlpha OneMinusSrcAlpha
+            Blend 0 SrcAlpha OneMinusSrcAlpha
+            Blend 1 Off
             
             CGPROGRAM
             #pragma vertex vert
@@ -62,6 +63,7 @@ Shader "EniGUI/Default"
                 uint meta1;
                 uint meta2;
                 uint meta3;
+                uint meta4;
             };
 
             StructuredBuffer<element> ELEMENTS;
@@ -74,6 +76,7 @@ Shader "EniGUI/Default"
                 uint meta1      : TEXCOORD2;
                 uint meta2      : TEXCOORD3;
                 uint meta3      : TEXCOORD4;
+                uint meta4      : TEXCOORD5;
             };
 
             static const float2 posNormalized[4] =
@@ -127,6 +130,7 @@ Shader "EniGUI/Default"
                 o.meta1 = e.meta1;
                 o.meta2 = e.meta2;
                 o.meta3 = e.meta3;
+                o.meta4 = e.meta4;
 
                 return o;
             }
@@ -141,7 +145,7 @@ Shader "EniGUI/Default"
             {
                 outFrag o;
 
-                uint tex = (i.meta1 >> 16) & 0x7;
+                uint tex = (i.meta1 >> 20) & 0xF;
 
                 float4 c = float4(1.0, 1.0, 1.0, 1.0);
 
@@ -159,13 +163,12 @@ Shader "EniGUI/Default"
 
                 o.color = c;
 
-                float a = step(0.5, c.a);
-
                 uint id = i.meta0 & 0xFFFFF;
+                if (c.a < 0.5) id = 0;
 
                 uint r = id & 0xFFFF;
                 uint g = id >> 16;
-                o.id   = float4(r / 65535.0, g / 65535.0, 0, a);
+                o.id   = float4(r / 65535.0, g / 65535.0, 0, 1);
 
                 return o;
             }

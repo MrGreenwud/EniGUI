@@ -9,9 +9,9 @@ namespace EniGUI.LowLevel
 {
     internal sealed class BatchData : IDisposable
     {
-        private static readonly float2[] s_ZeroUVs = new float2[2];
+        private static readonly float2[] m_ZeroUVs = new float2[2];
 
-        public readonly ComputeBuffer ElementBuffer;
+        public readonly ComputeBuffer Buffer;
 
         private NativeArray<UIElement> m_Elements;
 
@@ -22,21 +22,18 @@ namespace EniGUI.LowLevel
         public BatchData(int maxElementCount = 2500)
         {
             m_Elements = new(maxElementCount, Allocator.Persistent);
-
-            ElementBuffer = new(maxElementCount, sizeof(uint) * 8);
+            Buffer = new(maxElementCount, UnsafeUtility.SizeOf<UIElement>());
         }
-
-        private readonly float2 a = new float2(0, 1);
-        private readonly float2 b = new float2(1, 0);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddElement(
-            ShortRect rect, 
+            ShortRect rect,
+            byte type,
+            byte effects,
             uint id,
             ushort clip, 
             byte texture, 
-            ushort color,
-            byte type)
+            ushort color)
         {
             unsafe
             {
@@ -45,8 +42,8 @@ namespace EniGUI.LowLevel
                 var posYMin = unchecked((ushort)rect.MinY);
                 var posYMax = unchecked((ushort)rect.MaxY);
 
-                var uv0 = a;
-                var uv1 = b;
+                var uv0 = new float2(0, 1);
+                var uv1 = new float2(1, 0);
 
                 var uvX0 = (ushort)(uv0.x * 256f);
                 var uvY0 = (ushort)(uv0.y * 256f);
@@ -65,12 +62,14 @@ namespace EniGUI.LowLevel
                 e->Meta1 = ((uint)clip & 0x1FFF) << 19 | ((uint)texture & 0x7) << 16 | color;
                 e->Meta2 = 0; //unused
                 e->Meta3 = 0; //unused
+                e->Meta4 = 0; //unused
 
                 Count++;
             }
 
             IsFull = Count + 1 >= m_Elements.Length;
         }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddQuad(ShortRect rect, uint id, ushort clip, ReadOnlySpan<float2> uvs = default)
         {
@@ -80,7 +79,7 @@ namespace EniGUI.LowLevel
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void UpdateBuffer()
         {
-            ElementBuffer.SetData(m_Elements, 0, 0, Count); 
+            Buffer.SetData(m_Elements, 0, 0, Count);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -93,7 +92,7 @@ namespace EniGUI.LowLevel
 
         public void Dispose()
         {
-            ElementBuffer.Release();
+            Buffer.Release();
             m_Elements.Dispose();
         }
     }

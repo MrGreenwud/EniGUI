@@ -1,36 +1,53 @@
-using System.Collections.Generic;
+using System;
 using System.Runtime.CompilerServices;
+using UnityEngine.Assertions;
 
 namespace EniGUI.LowLevel
 {
     internal sealed class IDStack
     {
-        private readonly Stack<uint> m_PreviousID = new();
+        private uint[] m_Stack = new uint[32];
+        private int m_Depth;
 
-        public uint Current { get; private set; }
+        public uint Current
+        {
+            get
+            {
+                if (m_Depth == 0)
+                    return 0;
+
+                var hash = m_Stack[m_Depth];
+                hash = (hash ^ (hash >> 12)) & 0xFFFFFu;
+                return hash == 0 ? 1u : hash; ;
+            }
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public uint Push(uint id)
         {
-            uint hash = Current;
+            if (m_Depth + 1 == m_Stack.Length)
+                Array.Resize(ref m_Stack, m_Stack.Length * 2);
 
-            hash ^= id;
-            hash *= 16777619u;
+            uint hash = (m_Stack[m_Depth] ^ id) * 0x9E3779B1u;
+            hash ^= hash >> 15;
+            hash *= 0x85EBCA6Bu;
+            hash ^= hash >> 13;
 
-            m_PreviousID.Push(Current);
-            Current = hash;
+            m_Stack[++m_Depth] = hash;
+
             return Current;
         }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Pop()
         {
-            Current = m_PreviousID.Pop();
+            Assert.IsTrue(m_Depth > 0);
+            m_Depth--;
         }
         
         public void Reset()
         {
-            m_PreviousID.Clear();
-            Current = 0;
+            m_Depth = 0;
         }
     }
 }
